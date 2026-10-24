@@ -111,7 +111,7 @@
     // 読み込み中に別の画面へ移動していたら、古い画面は描かない
     if (myTurn !== renderCount) return;
 
-    ui.closeSheet();
+    ui.closeSheet({ immediate: true });
     const scrollY = window.scrollY;
     const header = screen.header(route.params, data);
     const main = freshMain();

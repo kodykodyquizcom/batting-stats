@@ -5,7 +5,7 @@
  * 【大事】アプリのファイルを直して公開し直すときは、下の CACHE_VERSION を必ず変えてください。
  *         変えないと、スマホには古いファイルが表示され続けます。
  */
-const CACHE_VERSION = 'v1.1.0';
+const CACHE_VERSION = 'v1.2.0';
 const CACHE_NAME = 'batting-stats-' + CACHE_VERSION;
 
 // 保存しておくファイルの一覧（ファイルを増やしたら、ここにも追加する）

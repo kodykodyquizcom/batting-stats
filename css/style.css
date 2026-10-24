@@ -230,8 +230,8 @@ svg {
   padding: 16px 16px calc(112px + var(--safe-bottom));
 }
 
-.app-main.has-input-panel {
-  padding-bottom: calc(330px + var(--safe-bottom));
+.app-main.has-record-bar {
+  padding-bottom: calc(112px + var(--safe-bottom));
 }
 
 .section {
@@ -658,8 +658,8 @@ svg {
 .chip--sac  { background: var(--c-sac-bg);  color: var(--c-sac); }
 .chip--out  { background: var(--c-out-bg);  color: var(--c-out); }
 
-/* 画面下に固定した入力パネル */
-.input-panel {
+/* 試合の画面の下：「＋ 第N打席を記録」ボタン（押すと入力パネルが開く） */
+.record-bar {
   position: fixed;
   left: 0;
   right: 0;
@@ -667,13 +667,16 @@ svg {
   z-index: 15;
   max-width: var(--content-max);
   margin: 0 auto;
-  padding: 10px 12px calc(12px + var(--safe-bottom));
-  background: rgba(255, 255, 255, 0.97);
-  border-top: 1px solid var(--c-border);
-  border-radius: 18px 18px 0 0;
-  box-shadow: 0 -6px 20px rgba(16, 24, 40, 0.1);
-  -webkit-backdrop-filter: blur(8px);
-  backdrop-filter: blur(8px);
+  padding: 12px 16px calc(12px + var(--safe-bottom));
+  background: linear-gradient(180deg, rgba(237, 240, 245, 0), var(--c-bg) 35%);
+}
+
+.record-bar__draft {
+  margin: 0 0 6px;
+  text-align: center;
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--c-sac);
 }
 
 .rbi-picker {
@@ -1038,10 +1041,10 @@ svg {
   height: 18px;
 }
 
-/* 下の入力パネルに隠れない位置までスクロールさせる */
-.has-input-panel .pa-item {
+/* 下の記録ボタンに隠れない位置までスクロールさせる */
+.has-record-bar .pa-item {
   scroll-margin-top: calc(var(--header-h) + var(--safe-top) + 16px);
-  scroll-margin-bottom: calc(340px + var(--safe-bottom));
+  scroll-margin-bottom: calc(120px + var(--safe-bottom));
 }
 
 .pa-item.is-new {
@@ -1098,6 +1101,7 @@ svg {
 /* 下からせり上がるパネル（打席の修正） */
 body.has-sheet {
   overflow: hidden;
+  overscroll-behavior-y: none; /* パネルを下へスワイプしたとき、画面の再読み込みが起きないように */
 }
 
 .sheet-backdrop {
@@ -1116,18 +1120,62 @@ body.has-sheet {
   max-width: var(--content-max);
   max-height: calc(100% - var(--safe-top) - 24px);
   overflow-y: auto;
-  padding: 6px 12px calc(16px + var(--safe-bottom));
+  overscroll-behavior: contain;
+  -webkit-overflow-scrolling: touch;
+  padding: 0 12px calc(16px + var(--safe-bottom));
   border-radius: 20px 20px 0 0;
   background: var(--c-surface);
   box-shadow: 0 -10px 30px rgba(11, 22, 48, 0.25);
   animation: sheet-up 0.22s ease-out;
+  transition: transform 0.2s ease-out;
+}
+
+.sheet.is-dragging {
+  transition: none;
+}
+
+/* パネル上部（つまみ・見出し）：スクロールしても見え続け、ここを下へスワイプすると閉じる */
+.sheet__top {
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  margin: 0 -12px;
+  padding: 0 12px;
+  background: var(--c-surface);
+  border-radius: 20px 20px 0 0;
+  touch-action: none;
+  cursor: grab;
+}
+
+.sheet__grab {
+  width: 44px;
+  height: 5px;
+  margin: 0 auto;
+  border-radius: 999px;
+  background: #c9ced8;
+  transform: translateY(8px);
 }
 
 .sheet__head {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 6px 2px 10px 4px;
+  padding: 14px 2px 10px 4px;
+}
+
+.sheet-backdrop.is-closing {
+  pointer-events: none;
+  animation: sheet-fade-out 0.2s ease-in forwards;
+}
+
+.sheet-backdrop.is-closing .sheet {
+  transform: translateY(100%) !important;
+  transition: transform 0.2s ease-in;
+}
+
+@keyframes sheet-fade-out {
+  from { opacity: 1; }
+  to { opacity: 0; }
 }
 
 .sheet__title {
@@ -1509,4 +1557,329 @@ body.has-sheet {
 .field__hint.is-new {
   color: var(--c-hit);
   font-weight: 700;
+}
+
+/* ---------- 改良第2弾：出場情報・打球の詳細・打席の状況・入力パネル ---------- */
+
+/* 打席の記録：結果と状況を縦に並べる */
+.pa-item__main {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 2px;
+  min-width: 0;
+}
+
+.pa-item__situation {
+  font-size: 12px;
+  color: var(--c-muted);
+}
+
+/* 試合の画面：出場情報 */
+.game-summary__appearance {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 10px;
+  margin-top: 6px;
+  font-size: 13px;
+}
+
+.game-tag--appearance {
+  background: rgba(246, 200, 95, 0.18);
+  color: var(--c-gold);
+}
+
+.game-summary__appearance-detail {
+  overflow-wrap: anywhere;
+}
+
+/* 試合の登録画面：出場情報 */
+.form__section {
+  margin-top: 22px;
+  padding-top: 16px;
+  border-top: 1px dashed var(--c-border);
+}
+
+.form__section + .field {
+  margin-top: 18px;
+}
+
+.form__section-title {
+  margin: 0 0 12px;
+  font-size: 15px;
+}
+
+.form__section .field + .field,
+.form__section #played-fields .field {
+  margin-top: 14px;
+}
+
+.segmented--4 {
+  grid-template-columns: repeat(4, 1fr);
+}
+
+.segmented--4 .segmented__btn {
+  font-size: 14px;
+}
+
+.segmented__btn--choice.is-selected {
+  background: var(--c-navy-800);
+  border-color: var(--c-navy-800);
+}
+
+.select {
+  -webkit-appearance: none;
+  appearance: none;
+  padding-right: 36px;
+  background-image: linear-gradient(45deg, transparent 50%, var(--c-muted) 50%), linear-gradient(135deg, var(--c-muted) 50%, transparent 50%);
+  background-position: calc(100% - 18px) 50%, calc(100% - 12px) 50%;
+  background-size: 6px 6px, 6px 6px;
+  background-repeat: no-repeat;
+}
+
+.position-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.position-row {
+  display: grid;
+  grid-template-columns: 76px 1fr auto;
+  align-items: center;
+  gap: 8px;
+}
+
+.position-row__label {
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--c-muted);
+}
+
+.position-row__remove {
+  width: 40px;
+  height: 40px;
+  border: 0;
+  border-radius: 50%;
+  background: var(--c-bg);
+  font-size: 18px;
+  color: var(--c-muted);
+  cursor: pointer;
+}
+
+.btn--small {
+  min-height: 40px;
+  margin-top: 8px;
+  padding: 0 12px;
+  font-size: 14px;
+  color: var(--c-navy-700);
+}
+
+/* 入力パネル：打席の状況（必要なときだけ開く） */
+.pa-section {
+  margin-bottom: 12px;
+  border: 1.5px solid var(--c-border);
+  border-radius: var(--radius-sm);
+  background: var(--c-surface);
+}
+
+.pa-section__summary {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  min-height: 48px;
+  padding: 8px 12px;
+  list-style: none;
+  cursor: pointer;
+}
+
+.pa-section__summary::-webkit-details-marker {
+  display: none;
+}
+
+.pa-section__summary::after {
+  content: "＋";
+  color: var(--c-muted);
+}
+
+.pa-section[open] .pa-section__summary::after {
+  content: "－";
+}
+
+.pa-section__title {
+  font-size: 14px;
+  font-weight: 700;
+}
+
+.pa-section__value {
+  flex: 1;
+  text-align: right;
+  font-size: 13px;
+  color: var(--c-navy-700);
+  font-weight: 700;
+}
+
+.pa-section__body {
+  padding: 0 12px 12px;
+}
+
+.opt-row + .opt-row {
+  margin-top: 12px;
+}
+
+.opt-row__label {
+  display: block;
+  margin-bottom: 6px;
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--c-muted);
+}
+
+.inning-row {
+  display: grid;
+  grid-template-columns: 1fr 1.4fr;
+  gap: 8px;
+}
+
+.inning-row .select {
+  min-height: 44px;
+  padding-top: 6px;
+  padding-bottom: 6px;
+}
+
+.choice-row {
+  display: flex;
+  gap: 6px;
+}
+
+.choice-row .choice-btn {
+  flex: 1;
+}
+
+.choice-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 6px;
+}
+
+.choice-btn {
+  min-height: 44px;
+  padding: 4px 6px;
+  border: 1.5px solid var(--c-border);
+  border-radius: var(--radius-sm);
+  background: var(--c-surface);
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--c-text);
+  cursor: pointer;
+}
+
+.choice-btn--unset {
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--c-muted);
+}
+
+.choice-btn--wide {
+  grid-column: 1 / -1;
+  min-height: 38px;
+}
+
+.choice-btn.is-selected {
+  background: var(--c-navy-800);
+  border-color: var(--c-navy-800);
+  color: #fff;
+}
+
+.choice-btn--unset.is-selected {
+  background: var(--c-out);
+  border-color: var(--c-out);
+}
+
+.choice-btn--fielder {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  min-height: 48px;
+}
+
+.choice-btn--fielder b {
+  font-size: 17px;
+}
+
+.choice-btn--fielder small {
+  font-family: var(--font-num);
+  font-size: 13px;
+  opacity: 0.6;
+}
+
+.link-btn {
+  margin-top: 10px;
+  padding: 6px 0;
+  border: 0;
+  background: none;
+  font-size: 13px;
+  color: var(--c-walk);
+  text-decoration: underline;
+  cursor: pointer;
+}
+
+/* 入力パネル：打球の詳細（アウトなどを選んだときに出る） */
+.batted-ball {
+  margin-top: 14px;
+  padding: 12px;
+  border-radius: var(--radius-sm);
+  background: var(--c-bg);
+  scroll-margin-bottom: 16px;
+}
+
+.batted-ball__head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  margin-bottom: 10px;
+}
+
+.batted-ball__title {
+  font-size: 14px;
+  font-weight: 700;
+}
+
+.batted-ball__preview {
+  font-size: 18px;
+  font-weight: 800;
+  color: var(--c-navy-800);
+}
+
+.batted-ball .btn {
+  margin-top: 14px;
+}
+
+/* 修正パネル：保存せずに閉じるときの確認 */
+.discard-bar {
+  margin: 4px 0 12px;
+  padding: 12px;
+  border-radius: var(--radius-sm);
+  background: var(--c-sac-bg);
+  color: #7a4a0c;
+  font-size: 14px;
+  font-weight: 700;
+}
+
+.discard-bar p {
+  margin: 0 0 8px;
+}
+
+.discard-bar__actions {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+}
+
+.discard-bar__actions .btn {
+  min-height: 44px;
+  font-size: 14px;
 }

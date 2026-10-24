@@ -7,13 +7,22 @@
  *
  * 保存するデータの形：
  * {
- *   schemaVersion: 2,                       … データ形式のバージョン
+ *   schemaVersion: 3,                       … データ形式のバージョン
  *   players: [{ id, name, createdAt, updatedAt, deletedAt }],
  *   venues: [{ id, name, createdAt, updatedAt, deletedAt }],            … 球場（バージョン2から）
  *   games: [{ id, date, opponent, memo, category, venueId, createdAt, updatedAt, deletedAt }],
  *       category … 'official'（公式戦）/ 'practice'（練習試合）/ null（未設定）
  *       venueId  … 球場のID / null（球場なし）
- *   plateAppearances: [{ id, gameId, playerId, seq, result, rbi, createdAt, updatedAt, deletedAt }],
+ *   appearances: [{ id, gameId, playerId, status, subType, battingOrder, positions, createdAt, updatedAt, deletedAt }],
+ *       … 試合ごとの出場情報（バージョン3から。1試合・1選手につき1件）
+ *       status       … 'starter'（スタメン）/ 'sub'（途中出場）/ 'dnp'（出場なし）/ null（未設定）
+ *       subType      … 途中出場の形 'pinch_hitter'（代打）/ 'pinch_runner'（代走）/ 'defensive'（守備）/ null
+ *       battingOrder … 1〜9 / null
+ *       positions    … 守った位置の履歴 [{ position: 'SS' }, { position: '2B' }]（試合途中の変更も順番に残す）
+ *   plateAppearances: [{ id, gameId, playerId, seq, result, rbi, battedBall, situation, createdAt, updatedAt, deletedAt }],
+ *       battedBall … 打球の詳細 { type: 'ground'など / null, fielders: ['SS'] } または null（未設定）
+ *                    fielders は処理した守備位置の並び（併殺の 6-4-3 なども将来そのまま入れられる）
+ *       situation  … 打席の状況 { outs: 0〜2 / null, runners: 'none'・'12'など / null, inning: 1〜 / null, half: 'top'・'bottom' / null } または null
  *   settings: { currentPlayerId, lastExportedAt }
  * }
  *
@@ -25,7 +34,7 @@ window.App = window.App || {};
 (function (App) {
   'use strict';
 
-  const SCHEMA_VERSION = 2;
+  const SCHEMA_VERSION = 3;
 
   // データ形式を変えるときは、古い形式から新しい形式への変換をここに追加します。
   // 変換では項目を「足す」だけにして、今あるデータは消さないこと。
@@ -37,6 +46,17 @@ window.App = window.App || {};
         if (game && typeof game === 'object') {
           if (game.category === undefined) game.category = null;
           if (game.venueId === undefined) game.venueId = null;
+        }
+      });
+      return data;
+    },
+    // バージョン2 → 3：出場情報の一覧を追加し、今までの打席は「打球の詳細：未設定」「状況：未設定」にする
+    2: function (data) {
+      data.appearances = Array.isArray(data.appearances) ? data.appearances : [];
+      (Array.isArray(data.plateAppearances) ? data.plateAppearances : []).forEach(function (pa) {
+        if (pa && typeof pa === 'object') {
+          if (pa.battedBall === undefined) pa.battedBall = null;
+          if (pa.situation === undefined) pa.situation = null;
         }
       });
       return data;
@@ -79,6 +99,7 @@ window.App = window.App || {};
       players: [],
       venues: [],
       games: [],
+      appearances: [],
       plateAppearances: [],
       settings: { currentPlayerId: null }
     };
@@ -122,6 +143,7 @@ window.App = window.App || {};
       players: Array.isArray(data.players) ? data.players : base.players,
       venues: Array.isArray(data.venues) ? data.venues : base.venues,
       games: Array.isArray(data.games) ? data.games : base.games,
+      appearances: Array.isArray(data.appearances) ? data.appearances : base.appearances,
       plateAppearances: Array.isArray(data.plateAppearances) ? data.plateAppearances : base.plateAppearances,
       settings: Object.assign(base.settings, data.settings)
     };
@@ -217,14 +239,119 @@ window.App = window.App || {};
     }
   }
 
+  function isBlank(value) {
+    return value === undefined || value === null || value === '';
+  }
+
+  function hasOwn(object, key) {
+    return Boolean(object) && Object.prototype.hasOwnProperty.call(object, key);
+  }
+
+  /*
+   * 打球の詳細を整える。何も選んでいなければ null（未設定）
+   *   { type: 'ground' など / null, fielders: ['SS'] }
+   */
+  function cleanBattedBall(value) {
+    if (isBlank(value)) return null;
+    if (typeof value !== 'object') throw invalid('打球の詳細が正しくありません。');
+    const type = isBlank(value.type) ? null : value.type;
+    if (type !== null && !App.getBattedBallType(type)) throw invalid('打球の種類が正しくありません。');
+    const fielders = isBlank(value.fielders) ? [] : value.fielders;
+    if (!Array.isArray(fielders) || fielders.length > 9) throw invalid('打球を処理した守備位置が正しくありません。');
+    fielders.forEach(function (code) {
+      const position = App.getPosition(code);
+      if (!position || position.number === null) throw invalid('打球を処理した守備位置が正しくありません。');
+    });
+    if (type === null && fielders.length === 0) return null;
+    return { type: type, fielders: fielders.slice() };
+  }
+
+  /*
+   * 打席の状況を整える。何も選んでいなければ null（未設定）
+   *   { outs: 0〜2 / null, runners: 'none'・'1'・'12' など / null, inning: 1〜 / null, half: 'top'・'bottom' / null }
+   */
+  function cleanSituation(value) {
+    if (isBlank(value)) return null;
+    if (typeof value !== 'object') throw invalid('打席の状況が正しくありません。');
+    const outs = isBlank(value.outs) ? null : Number(value.outs);
+    if (outs !== null && App.OUT_COUNTS.indexOf(outs) === -1) throw invalid('アウトカウントが正しくありません。');
+    const runners = isBlank(value.runners) ? null : String(value.runners);
+    if (runners !== null && !App.getRunnerState(runners)) throw invalid('走者状況が正しくありません。');
+    const inning = isBlank(value.inning) ? null : Number(value.inning);
+    if (inning !== null && !(Number.isInteger(inning) && inning >= 1 && inning <= App.MAX_INNING)) {
+      throw invalid('イニングが正しくありません。');
+    }
+    const half = isBlank(value.half) ? null : value.half;
+    if (half !== null && !App.getInningHalf(half)) throw invalid('イニングの表・裏が正しくありません。');
+    if (outs === null && runners === null && inning === null && half === null) return null;
+    return { outs: outs, runners: runners, inning: inning, half: half };
+  }
+
   function cleanPlateAppearanceInput(input, current) {
-    const merged = Object.assign({}, current, input);
-    if (!App.getResultType(merged.result)) throw invalid('打席結果が正しくありません。');
+    const merged = Object.assign({ battedBall: null, situation: null }, current, input);
+    const type = App.getResultType(merged.result);
+    if (!type) throw invalid('打席結果が正しくありません。');
     let rbi = Number(merged.rbi);
     if (App.RBI_OPTIONS.indexOf(rbi) === -1) throw invalid('打点は0〜4で選んでください。');
     // 本塁打は打者自身が生還するので、打点は最低1
     if (merged.result === 'homerun' && rbi === 0) rbi = 1;
-    return { result: merged.result, rbi: rbi };
+    // 打球の詳細は、打球が前に飛ぶ結果（アウト・犠打・犠飛・失策・野選）のときだけ残す
+    const battedBall = type.inPlay ? cleanBattedBall(merged.battedBall) : null;
+    return { result: merged.result, rbi: rbi, battedBall: battedBall, situation: cleanSituation(merged.situation) };
+  }
+
+  /*
+   * 試合ごとの出場情報を整える
+   *   打順・守備位置はスタメン・途中出場のときだけ、途中出場の形は途中出場のときだけ残す
+   */
+  function cleanAppearanceInput(value) {
+    if (isBlank(value)) value = {};
+    if (typeof value !== 'object') throw invalid('出場情報が正しくありません。');
+    const status = isBlank(value.status) ? null : value.status;
+    if (status !== null && !App.getAppearanceStatus(status)) throw invalid('出場区分が正しくありません。');
+    const subType = isBlank(value.subType) ? null : value.subType;
+    if (subType !== null && !App.getSubType(subType)) throw invalid('途中出場の形が正しくありません。');
+    const battingOrder = isBlank(value.battingOrder) ? null : Number(value.battingOrder);
+    if (battingOrder !== null && App.BATTING_ORDERS.indexOf(battingOrder) === -1) throw invalid('打順が正しくありません。');
+    const positions = isBlank(value.positions) ? [] : value.positions;
+    if (!Array.isArray(positions) || positions.length > App.MAX_POSITION_CHANGES) throw invalid('守備位置が正しくありません。');
+    const cleanedPositions = positions.map(function (item) {
+      const code = item && typeof item === 'object' ? item.position : item;
+      if (!App.getPosition(code)) throw invalid('守備位置が正しくありません。');
+      return { position: code };
+    });
+    const played = status === 'starter' || status === 'sub';
+    return {
+      status: status,
+      subType: status === 'sub' ? subType : null,
+      battingOrder: played ? battingOrder : null,
+      positions: played ? cleanedPositions : []
+    };
+  }
+
+  function findAppearance(data, gameId) {
+    const playerId = data.settings.currentPlayerId;
+    return data.appearances.find(function (a) {
+      return isAlive(a) && a.gameId === gameId && a.playerId === playerId;
+    }) || null;
+  }
+
+  // 試合の保存と同時に、出場情報も保存する（input.appearance があるときだけ）
+  function applyAppearance(data, gameId, input, now) {
+    if (!hasOwn(input, 'appearance')) return;
+    const values = cleanAppearanceInput(input.appearance);
+    const existing = findAppearance(data, gameId);
+    if (existing) {
+      Object.assign(existing, values, { updatedAt: now });
+      return;
+    }
+    const isEmpty = values.status === null && values.battingOrder === null && !values.positions.length;
+    if (isEmpty) return; // 何も選んでいなければ記録を作らない（未設定のまま）
+    data.appearances.push(Object.assign(
+      { id: createId(), gameId: gameId, playerId: data.settings.currentPlayerId },
+      values,
+      { createdAt: now, updatedAt: now, deletedAt: null }
+    ));
   }
 
   function compareGames(a, b) {
@@ -302,9 +429,35 @@ window.App = window.App || {};
       if (!App.getResultType(pa.result)) throw invalid(name + 'の打席結果が正しくありません。');
       if (App.RBI_OPTIONS.indexOf(pa.rbi) === -1) throw invalid(name + 'の打点が正しくありません。');
       if (!Number.isInteger(pa.seq) || pa.seq < 1) throw invalid(name + 'の打席の順番が正しくありません。');
+      try {
+        pa.battedBall = App.getResultType(pa.result).inPlay ? cleanBattedBall(pa.battedBall) : null;
+        pa.situation = cleanSituation(pa.situation);
+      } catch (e) {
+        throw invalid(name + 'の' + e.message);
+      }
       // 削除済みの試合の打席は、打席も削除済みとして扱う
       const game = gamesById[pa.gameId];
       if (game.deletedAt && !pa.deletedAt) pa.deletedAt = game.deletedAt;
+    });
+
+    const appearanceIds = new Set();
+    const appearanceKeys = new Set();
+    data.appearances.forEach(function (appearance, i) {
+      const name = checkCommon(appearance, '出場データ', i, appearanceIds);
+      if (!gameIds.has(appearance.gameId)) throw invalid(name + 'の試合が見つかりません。');
+      if (!playerIds.has(appearance.playerId)) throw invalid(name + 'の選手が見つかりません。');
+      try {
+        Object.assign(appearance, cleanAppearanceInput(appearance));
+      } catch (e) {
+        throw invalid(name + 'の' + e.message);
+      }
+      const game = gamesById[appearance.gameId];
+      if (game.deletedAt && !appearance.deletedAt) appearance.deletedAt = game.deletedAt;
+      if (!appearance.deletedAt) {
+        const key = appearance.gameId + '|' + appearance.playerId;
+        if (appearanceKeys.has(key)) throw invalid(name + 'が重複しています（同じ試合の出場情報が2件あります）。');
+        appearanceKeys.add(key);
+      }
     });
   }
 
@@ -323,8 +476,12 @@ window.App = window.App || {};
     if (source.venues !== undefined && !Array.isArray(source.venues)) {
       throw invalid('バックアップファイルの形式が正しくありません（球場のデータが正しくありません）。');
     }
+    if (source.appearances !== undefined && !Array.isArray(source.appearances)) {
+      throw invalid('バックアップファイルの形式が正しくありません（出場情報のデータが正しくありません）。');
+    }
     const venueCount = Array.isArray(source.venues) ? source.venues.length : 0;
-    if (source.players.length + venueCount + source.games.length + source.plateAppearances.length > MAX_BACKUP_RECORDS) {
+    const appearanceCount = Array.isArray(source.appearances) ? source.appearances.length : 0;
+    if (source.players.length + venueCount + source.games.length + appearanceCount + source.plateAppearances.length > MAX_BACKUP_RECORDS) {
       throw invalid('バックアップファイルのデータが多すぎます。');
     }
     const copy = clone(source);
@@ -410,6 +567,7 @@ window.App = window.App || {};
         applyVenue(data, input, values, now);
         const game = Object.assign({ id: createId() }, values, { createdAt: now, updatedAt: now, deletedAt: null });
         data.games.push(game);
+        applyAppearance(data, game.id, input, now);
         return game;
       });
     },
@@ -424,6 +582,7 @@ window.App = window.App || {};
         const values = cleanGameInput(changes, game);
         applyVenue(data, changes, values, now);
         Object.assign(game, values, { updatedAt: now });
+        applyAppearance(data, game.id, changes, now);
         return game;
       });
     },
@@ -437,14 +596,20 @@ window.App = window.App || {};
         const now = nowIso();
         game.deletedAt = now;
         game.updatedAt = now;
-        data.plateAppearances.forEach(function (pa) {
-          if (pa.gameId === id && isAlive(pa)) {
-            pa.deletedAt = now;
-            pa.updatedAt = now;
+        data.plateAppearances.concat(data.appearances).forEach(function (record) {
+          if (record.gameId === id && isAlive(record)) {
+            record.deletedAt = now;
+            record.updatedAt = now;
           }
         });
         return null;
       });
+    },
+
+    /** この試合の出場情報（今の選手のもの。未登録なら null） */
+    getAppearance: async function (gameId) {
+      requireReady();
+      return clone(findAppearance(db, gameId));
     },
 
     // ----- 球場 -----
@@ -567,6 +732,7 @@ window.App = window.App || {};
           players: db.players,
           venues: db.venues,
           games: db.games,
+          appearances: db.appearances,
           plateAppearances: db.plateAppearances,
           settings: db.settings
         })

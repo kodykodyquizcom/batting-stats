@@ -165,45 +165,216 @@
   }
 
   /*
-   * 画面の下からせり上がるパネル（打席の修正などに使う）
-   *   openSheet({ title, body }) … body はHTML。パネルの要素を返す
-   *   closeSheet()               … 閉じる（背景をタップ・×・Escキーでも閉じる）
+   * 画面の下からせり上がるパネル（打席の記録・修正、バックアップの確認などに使う）
+   *   openSheet({ title, body, className, onBeforeClose, onClose }) … body はHTML。パネルの要素を返す
+   *       onBeforeClose … 閉じる前に呼ばれる。false を返すと閉じない（入力途中の確認などに使う）
+   *       onClose       … 閉じたあとに呼ばれる
+   *   requestCloseSheet() … 「閉じる操作」をしたとき（×・背景・Esc・下へスワイプ）。onBeforeClose を確認してから閉じる
+   *   closeSheet()        … 確認せずに閉じる（保存が終わったときなど）
+   *
+   * パネルの中は縦にスクロールできる。中身が一番上までスクロールされているときに
+   * 下へスワイプするとパネルが閉じる（スクロールの途中ならスクロールが優先）。
+   * 上のつまみ・見出し部分は、いつでも下へスワイプして閉じられる。
    */
-  let openSheetEl = null;
+  let current = null; // { backdrop, sheet, options }
 
   function onSheetKeydown(event) {
-    if (event.key === 'Escape') closeSheet();
+    if (event.key === 'Escape') requestCloseSheet();
   }
 
-  function closeSheet() {
-    if (!openSheetEl) return;
-    openSheetEl.remove();
-    openSheetEl = null;
+  function closeSheet(closeOptions) {
+    if (!current) return;
+    const closing = current;
+    current = null;
     document.body.classList.remove('has-sheet');
     document.removeEventListener('keydown', onSheetKeydown);
+    closing.backdrop.classList.add('is-closing');
+    closing.backdrop.setAttribute('aria-hidden', 'true');
+    if (closeOptions && closeOptions.immediate) {
+      closing.backdrop.remove();
+    } else {
+      setTimeout(function () { closing.backdrop.remove(); }, 220);
+    }
+    if (closing.options.onClose) closing.options.onClose();
+  }
+
+  function requestCloseSheet() {
+    if (!current) return;
+    if (current.options.onBeforeClose && current.options.onBeforeClose() === false) {
+      current.sheet.style.transform = ''; // 閉じないときは元の位置に戻す
+      return;
+    }
+    closeSheet();
+  }
+
+  // 下へのスワイプで閉じる（中身のスクロールとぶつからないようにする）
+  function enableSwipeToClose(sheet) {
+    let startY = null;
+    let lastY = 0;
+    let startTime = 0;
+    let dragging = false;
+    let fromHead = false;
+
+    function begin(y, target) {
+      fromHead = Boolean(target.closest('.sheet__top'));
+      // 中身を下までスクロールしている途中なら、スワイプではなくスクロールとして扱う
+      if (!fromHead && sheet.scrollTop > 0) { startY = null; return; }
+      if (target.closest('select, input, textarea')) { startY = null; return; }
+      startY = y;
+      lastY = y;
+      startTime = Date.now();
+      dragging = false;
+    }
+
+    function move(y, event) {
+      if (startY === null) return;
+      const dy = y - startY;
+      lastY = y;
+      if (!dragging) {
+        if (dy > 10 && (fromHead || sheet.scrollTop <= 0)) {
+          dragging = true;
+          sheet.classList.add('is-dragging');
+        } else if (Math.abs(dy) > 10) {
+          startY = null; // 上へのスワイプはスクロールに任せる
+          return;
+        } else {
+          return;
+        }
+      }
+      if (event.cancelable) event.preventDefault();
+      sheet.style.transform = 'translateY(' + Math.max(0, dy) + 'px)';
+    }
+
+    function end() {
+      if (startY === null) return;
+      const dy = lastY - startY;
+      const velocity = dy / Math.max(1, Date.now() - startTime);
+      const wasDragging = dragging;
+      startY = null;
+      dragging = false;
+      sheet.classList.remove('is-dragging');
+      if (wasDragging && (dy > 100 || (dy > 40 && velocity > 0.5))) {
+        requestCloseSheet();
+      } else {
+        sheet.style.transform = '';
+      }
+    }
+
+    sheet.addEventListener('touchstart', function (event) {
+      if (event.touches.length === 1) begin(event.touches[0].clientY, event.target);
+    }, { passive: true });
+    sheet.addEventListener('touchmove', function (event) {
+      if (event.touches.length === 1) move(event.touches[0].clientY, event);
+    }, { passive: false });
+    sheet.addEventListener('touchend', end);
+    sheet.addEventListener('touchcancel', end);
+
+    // パソコンで確認するとき用：つまみ・見出しをマウスでドラッグ
+    sheet.querySelector('.sheet__top').addEventListener('mousedown', function (event) {
+      if (event.target.closest('button')) return;
+      begin(event.clientY, event.target);
+      function onMove(e) { move(e.clientY, e); }
+      function onUp() {
+        document.removeEventListener('mousemove', onMove);
+        document.removeEventListener('mouseup', onUp);
+        end();
+      }
+      document.addEventListener('mousemove', onMove);
+      document.addEventListener('mouseup', onUp);
+    });
   }
 
   function openSheet(options) {
-    closeSheet();
+    closeSheet({ immediate: true });
     hideToast();
     const backdrop = document.createElement('div');
     backdrop.className = 'sheet-backdrop';
     backdrop.innerHTML =
-      '<div class="sheet" role="dialog" aria-modal="true" aria-labelledby="sheet-title">' +
-        '<div class="sheet__head">' +
-          '<h2 class="sheet__title" id="sheet-title">' + escapeHtml(options.title) + '</h2>' +
-          '<button class="sheet__close" type="button" aria-label="閉じる">×</button>' +
+      '<div class="sheet' + (options.className ? ' ' + options.className : '') + '" role="dialog" aria-modal="true" aria-labelledby="sheet-title">' +
+        '<div class="sheet__top">' +
+          '<div class="sheet__grab" aria-hidden="true"></div>' +
+          '<div class="sheet__head">' +
+            '<h2 class="sheet__title" id="sheet-title">' + escapeHtml(options.title) + '</h2>' +
+            '<button class="sheet__close" type="button" aria-label="閉じる">×</button>' +
+          '</div>' +
         '</div>' +
-        options.body +
+        '<div class="sheet__body">' + options.body + '</div>' +
       '</div>';
+    const sheet = backdrop.querySelector('.sheet');
     backdrop.addEventListener('click', function (event) {
-      if (event.target === backdrop || event.target.closest('.sheet__close')) closeSheet();
+      if (event.target === backdrop || event.target.closest('.sheet__close')) requestCloseSheet();
     });
     document.body.appendChild(backdrop);
     document.body.classList.add('has-sheet');
     document.addEventListener('keydown', onSheetKeydown);
-    openSheetEl = backdrop;
-    return backdrop.querySelector('.sheet');
+    current = { backdrop: backdrop, sheet: sheet, options: options };
+    enableSwipeToClose(sheet);
+    return sheet;
+  }
+
+  // ----- 野球の表記 -----
+
+  function positionLabel(code) {
+    const position = App.getPosition(code);
+    return position ? position.label : '';
+  }
+
+  /**
+   * 出場情報の表示用の文字
+   *   { status: 'スタメン' / '途中出場（代打）' など, order: '4番' / '', positions: '遊撃手 → 二塁手' / '' }
+   *   未設定なら null
+   */
+  function appearanceText(appearance) {
+    if (!appearance || !App.getAppearanceStatus(appearance.status)) return null;
+    const status = App.getAppearanceStatus(appearance.status).label;
+    const subType = App.getSubType(appearance.subType);
+    return {
+      status: subType ? status + '（' + subType.label + '）' : status,
+      order: appearance.battingOrder ? appearance.battingOrder + '番' : '',
+      positions: (appearance.positions || []).map(function (p) { return positionLabel(p.position); }).join(' → ')
+    };
+  }
+
+  /*
+   * 打球の詳細をスコアブック風に（例：遊ゴロ、中飛、三直、二ポップ、中犠飛、遊失、遊野選）
+   * 記録がなければ空文字
+   */
+  function battedBallText(resultCode, battedBall) {
+    if (!battedBall) return '';
+    const fielders = battedBall.fielders || [];
+    const position = fielders.length ? App.getPosition(fielders[0]) : null;
+    const ball = App.getBattedBallType(battedBall.type);
+    let text = '';
+    if (resultCode === 'out') {
+      if (position && ball) text = ball.code === 'other' ? position.short + '（その他）' : position.short + ball.suffix;
+      else if (position) text = position.label + '処理';
+      else if (ball) text = ball.code === 'other' ? '' : ball.label + 'アウト';
+    } else if (position) {
+      const suffix = { sac_bunt: '犠打', sac_fly: '犠飛', error: '失', fielders_choice: '野選' }[resultCode] || '';
+      text = position.short + suffix;
+    }
+    // 複数の守備位置が関わったとき（将来の併殺など）は守備番号も添える（例：6-4-3）
+    if (text && fielders.length > 1) {
+      text += '（' + fielders.map(function (code) { return App.getPosition(code).number; }).join('-') + '）';
+    }
+    return text;
+  }
+
+  // 打席の結果の表示（打球の詳細があればスコアブック風、なければ結果の名前）
+  function plateAppearanceLabel(pa) {
+    return battedBallText(pa.result, pa.battedBall) || App.getResultType(pa.result).label;
+  }
+
+  // 打席の状況（例：3回表 1アウト 一・二塁）。記録がなければ空文字
+  function situationText(situation) {
+    if (!situation) return '';
+    const parts = [];
+    const half = App.getInningHalf(situation.half);
+    if (situation.inning || half) parts.push((situation.inning ? situation.inning + '回' : '') + (half ? half.label : ''));
+    if (situation.outs !== null && situation.outs !== undefined) parts.push(situation.outs + 'アウト');
+    const runners = App.getRunnerState(situation.runners);
+    if (runners) parts.push(runners.label);
+    return parts.join(' ');
   }
 
   const icons = {
@@ -244,6 +415,12 @@
     toast: toast,
     openSheet: openSheet,
     closeSheet: closeSheet,
+    requestCloseSheet: requestCloseSheet,
+    positionLabel: positionLabel,
+    appearanceText: appearanceText,
+    battedBallText: battedBallText,
+    plateAppearanceLabel: plateAppearanceLabel,
+    situationText: situationText,
     icons: icons
   };
 })(window.App);

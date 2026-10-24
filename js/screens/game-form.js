@@ -4,6 +4,8 @@
  *   試合区分 … 公式戦 / 練習試合 / 未設定 から選ぶ
  *   球場     … 登録済みの球場をタップして選ぶか、新しい球場名を入力する
  *              （新しい球場は、試合を保存したときに一覧へ追加される）
+ *   出場情報 … 出場区分（スタメン / 途中出場 / 出場なし / 未設定）、途中出場の形、打順、守備位置
+ *              守備位置は「変更を追加」で試合途中の変更も順番に記録できる
  */
 window.App = window.App || {};
 App.screens = App.screens || {};
@@ -33,15 +35,64 @@ App.screens = App.screens || {};
     }).join('');
   }
 
+  // 「未設定」つきの切り替えボタン（出場区分・途中出場の形）
+  function choiceButtons(options, selected, attr) {
+    return options.concat([{ code: '', label: App.UNSET_LABEL }]).map(function (option) {
+      const on = option.code === (selected || '');
+      return '<button class="segmented__btn ' + (option.code ? 'segmented__btn--choice' : 'segmented__btn--unset') +
+        (on ? ' is-selected' : '') + '" type="button" role="radio" aria-checked="' + on + '" ' +
+        'data-' + attr + '="' + option.code + '">' + option.label + '</button>';
+    }).join('');
+  }
+
+  // 切り替えボタンを押したときの見た目の更新。onChange に選んだ値（未設定なら null）を渡す
+  function bindChoice(container, attr, onChange) {
+    container.addEventListener('click', function (event) {
+      const button = event.target.closest('.segmented__btn');
+      if (!button) return;
+      container.querySelectorAll('.segmented__btn').forEach(function (btn) {
+        const on = btn === button;
+        btn.classList.toggle('is-selected', on);
+        btn.setAttribute('aria-checked', String(on));
+      });
+      onChange(button.dataset[attr] || null);
+    });
+  }
+
+  function orderOptions(selected) {
+    return '<option value="">' + App.UNSET_LABEL + '</option>' +
+      App.BATTING_ORDERS.map(function (n) {
+        return '<option value="' + n + '"' + (n === selected ? ' selected' : '') + '>' + n + '番</option>';
+      }).join('');
+  }
+
+  function positionRow(code, index) {
+    return '<div class="position-row">' +
+      '<span class="position-row__label">' + (index === 0 ? '守備位置' : '↓ 変更後') + '</span>' +
+      '<select class="input select position-select" data-index="' + index + '" aria-label="' +
+        (index === 0 ? '守備位置' : (index + '回目の守備位置の変更')) + '">' +
+        '<option value="">' + App.UNSET_LABEL + '</option>' +
+        App.POSITIONS.map(function (p) {
+          return '<option value="' + p.code + '"' + (p.code === code ? ' selected' : '') + '>' + p.label + '</option>';
+        }).join('') +
+      '</select>' +
+      (index > 0
+        ? '<button class="position-row__remove" type="button" data-index="' + index + '" aria-label="この変更を削除">×</button>'
+        : '') +
+    '</div>';
+  }
+
   App.screens.gameForm = {
     load: async function (params) {
       const venues = await App.store.listVenues();
-      if (params.mode !== 'edit') return { game: null, venue: null, venues: venues, paCount: 0 };
+      const empty = { game: null, venue: null, venues: venues, appearance: null, paCount: 0 };
+      if (params.mode !== 'edit') return empty;
       const game = await App.store.getGame(params.gameId);
-      if (!game) return { game: null, venue: null, venues: venues, paCount: 0 };
+      if (!game) return empty;
       const plateAppearances = await App.store.listPlateAppearances({ gameId: game.id });
       const venue = await App.store.getVenue(game.venueId);
-      return { game: game, venue: venue, venues: venues, paCount: plateAppearances.length };
+      const appearance = await App.store.getAppearance(game.id);
+      return { game: game, venue: venue, venues: venues, appearance: appearance, paCount: plateAppearances.length };
     },
 
     header: function (params) {
@@ -65,6 +116,10 @@ App.screens = App.screens || {};
       const venueName = data.venue ? data.venue.name : '';
       const cancelHref = isEdit ? detailPath(game.id) : '#/';
       const venues = data.venues;
+      const appearance = data.appearance || { status: null, subType: null, battingOrder: null, positions: [] };
+      // 守備位置の欄（最初の1つは常に表示）
+      let positions = appearance.positions.map(function (p) { return p.position; });
+      if (!positions.length) positions = [''];
 
       const venueChips = venues.length
         ? '<div class="venue-chips" aria-label="登録済みの球場">' +
@@ -102,6 +157,33 @@ App.screens = App.screens || {};
             '</datalist>' +
             venueChips +
             '<p class="field__hint" id="venue-hint"></p>' +
+          '</div>' +
+          '<div class="form__section" id="appearance-section">' +
+            '<h3 class="form__section-title">出場情報<span class="field__optional">任意</span></h3>' +
+            '<div class="field">' +
+              '<span class="field__label" id="status-label">出場区分</span>' +
+              '<div class="segmented segmented--4" id="status-picker" role="radiogroup" aria-labelledby="status-label">' +
+                choiceButtons(App.APPEARANCE_STATUSES, appearance.status, 'status') +
+              '</div>' +
+            '</div>' +
+            '<div class="field" id="subtype-field">' +
+              '<span class="field__label" id="subtype-label">出場の形</span>' +
+              '<div class="segmented segmented--4" id="subtype-picker" role="radiogroup" aria-labelledby="subtype-label">' +
+                choiceButtons(App.SUB_TYPES, appearance.subType, 'subtype') +
+              '</div>' +
+            '</div>' +
+            '<div id="played-fields">' +
+              '<div class="field">' +
+                '<label class="field__label" for="batting-order" id="order-label">打順</label>' +
+                '<select class="input select" id="batting-order">' + orderOptions(appearance.battingOrder) + '</select>' +
+              '</div>' +
+              '<div class="field">' +
+                '<div class="position-list" id="position-list"></div>' +
+                '<button class="btn btn--ghost btn--small" type="button" id="add-position">＋ 守備位置の変更を追加</button>' +
+                '<p class="field__hint">例：代打のあと一塁の守備についたら「途中出場・代打」を選び、守備位置を「一塁手」に。' +
+                  '試合の途中で守備位置が変わったら「変更を追加」で順番に記録できます。</p>' +
+              '</div>' +
+            '</div>' +
           '</div>' +
           '<div class="field">' +
             '<label class="field__label" for="game-memo">メモ<span class="field__optional">任意</span></label>' +
@@ -187,6 +269,53 @@ App.screens = App.screens || {};
       venueInput.addEventListener('input', syncVenue);
       syncVenue();
 
+      // ----- 出場情報 -----
+      let status = appearance.status || null;
+      let subType = appearance.subType || null;
+      const subtypeField = form.querySelector('#subtype-field');
+      const playedFields = form.querySelector('#played-fields');
+      const orderLabel = form.querySelector('#order-label');
+      const orderSelect = form.querySelector('#batting-order');
+      const positionList = form.querySelector('#position-list');
+      const addPositionButton = form.querySelector('#add-position');
+
+      // 出場区分に合わせて、必要な欄だけを見せる（隠した欄の入力は消さずに残しておく）
+      function syncAppearance() {
+        subtypeField.hidden = status !== 'sub';
+        playedFields.hidden = status !== 'starter' && status !== 'sub';
+        orderLabel.textContent = status === 'sub' ? '打順（途中から入った打順）' : '打順（先発打順）';
+      }
+
+      function renderPositions() {
+        positionList.innerHTML = positions.map(positionRow).join('');
+        addPositionButton.hidden = positions.length >= App.MAX_POSITION_CHANGES;
+      }
+
+      positionList.addEventListener('change', function (event) {
+        const select = event.target.closest('.position-select');
+        if (select) positions[Number(select.dataset.index)] = select.value;
+      });
+      positionList.addEventListener('click', function (event) {
+        const remove = event.target.closest('.position-row__remove');
+        if (!remove) return;
+        positions.splice(Number(remove.dataset.index), 1);
+        renderPositions();
+      });
+      addPositionButton.addEventListener('click', function () {
+        positions.push('');
+        renderPositions();
+        const selects = positionList.querySelectorAll('.position-select');
+        selects[selects.length - 1].focus();
+      });
+
+      bindChoice(form.querySelector('#status-picker'), 'status', function (value) {
+        status = value;
+        syncAppearance();
+      });
+      bindChoice(form.querySelector('#subtype-picker'), 'subtype', function (value) { subType = value; });
+      renderPositions();
+      syncAppearance();
+
       let saving = false;
 
       form.addEventListener('submit', async function (event) {
@@ -198,7 +327,13 @@ App.screens = App.screens || {};
           opponent: opponentInput.value.trim(),
           memo: memoInput.value.trim(),
           category: category,
-          venueName: venueInput.value.trim()
+          venueName: venueInput.value.trim(),
+          appearance: {
+            status: status,
+            subType: subType,
+            battingOrder: orderSelect.value ? Number(orderSelect.value) : null,
+            positions: positions.filter(Boolean).map(function (code) { return { position: code }; })
+          }
         };
 
         dateError.hidden = input.date !== '';
