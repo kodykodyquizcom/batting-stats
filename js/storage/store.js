@@ -7,11 +7,14 @@
  *
  * 保存するデータの形：
  * {
- *   schemaVersion: 1,                       … データ形式のバージョン
+ *   schemaVersion: 2,                       … データ形式のバージョン
  *   players: [{ id, name, createdAt, updatedAt, deletedAt }],
- *   games: [{ id, date, opponent, memo, createdAt, updatedAt, deletedAt }],
+ *   venues: [{ id, name, createdAt, updatedAt, deletedAt }],            … 球場（バージョン2から）
+ *   games: [{ id, date, opponent, memo, category, venueId, createdAt, updatedAt, deletedAt }],
+ *       category … 'official'（公式戦）/ 'practice'（練習試合）/ null（未設定）
+ *       venueId  … 球場のID / null（球場なし）
  *   plateAppearances: [{ id, gameId, playerId, seq, result, rbi, createdAt, updatedAt, deletedAt }],
- *   settings: { currentPlayerId }
+ *   settings: { currentPlayerId, lastExportedAt }
  * }
  *
  * 削除は「deletedAt（削除日時）」を入れるだけで、データ自体は残します。
@@ -22,14 +25,27 @@ window.App = window.App || {};
 (function (App) {
   'use strict';
 
-  const SCHEMA_VERSION = 1;
+  const SCHEMA_VERSION = 2;
 
   // データ形式を変えるときは、古い形式から新しい形式への変換をここに追加します。
-  // 例）1: function (data) { ...バージョン1→2への変換...; return data; }
-  const MIGRATIONS = {};
+  // 変換では項目を「足す」だけにして、今あるデータは消さないこと。
+  const MIGRATIONS = {
+    // バージョン1 → 2：球場の一覧を追加し、今までの試合は「試合区分：未設定」「球場：なし」にする
+    1: function (data) {
+      data.venues = Array.isArray(data.venues) ? data.venues : [];
+      (Array.isArray(data.games) ? data.games : []).forEach(function (game) {
+        if (game && typeof game === 'object') {
+          if (game.category === undefined) game.category = null;
+          if (game.venueId === undefined) game.venueId = null;
+        }
+      });
+      return data;
+    }
+  };
 
   const OPPONENT_MAX = 40;
   const MEMO_MAX = 200;
+  const VENUE_MAX = 40;
 
   let adapter = null;
   let db = null;
@@ -61,6 +77,7 @@ window.App = window.App || {};
     return {
       schemaVersion: SCHEMA_VERSION,
       players: [],
+      venues: [],
       games: [],
       plateAppearances: [],
       settings: { currentPlayerId: null }
@@ -103,6 +120,7 @@ window.App = window.App || {};
     return {
       schemaVersion: data.schemaVersion,
       players: Array.isArray(data.players) ? data.players : base.players,
+      venues: Array.isArray(data.venues) ? data.venues : base.venues,
       games: Array.isArray(data.games) ? data.games : base.games,
       plateAppearances: Array.isArray(data.plateAppearances) ? data.plateAppearances : base.plateAppearances,
       settings: Object.assign(base.settings, data.settings)
@@ -141,10 +159,12 @@ window.App = window.App || {};
   // ---------- 入力チェック ----------
 
   function cleanGameInput(input, current) {
-    const merged = Object.assign({}, current, input);
+    const merged = Object.assign({ category: null, venueId: null }, current, input);
     const date = String(merged.date || '');
     const opponent = String(merged.opponent || '').trim();
     const memo = String(merged.memo || '').trim();
+    const category = merged.category == null || merged.category === '' ? null : merged.category;
+    const venueId = merged.venueId == null || merged.venueId === '' ? null : String(merged.venueId);
 
     if (!/^\d{4}-\d{2}-\d{2}$/.test(date) || isNaN(new Date(date).getTime())) {
       throw invalid('日付が正しくありません。');
@@ -152,8 +172,49 @@ window.App = window.App || {};
     if (!opponent) throw invalid('対戦相手を入力してください。');
     if (opponent.length > OPPONENT_MAX) throw invalid('対戦相手は' + OPPONENT_MAX + '文字以内で入力してください。');
     if (memo.length > MEMO_MAX) throw invalid('メモは' + MEMO_MAX + '文字以内で入力してください。');
+    if (category !== null && !App.getGameCategory(category)) throw invalid('試合区分が正しくありません。');
 
-    return { date: date, opponent: opponent, memo: memo };
+    return { date: date, opponent: opponent, memo: memo, category: category, venueId: venueId };
+  }
+
+  // 球場名を整える（前後の空白を取り、全角英数字などをそろえる）
+  function cleanVenueName(value) {
+    const name = String(value == null ? '' : value).normalize('NFKC').replace(/\s+/g, ' ').trim();
+    if (name.length > VENUE_MAX) throw invalid('球場名は' + VENUE_MAX + '文字以内で入力してください。');
+    return name;
+  }
+
+  // 同じ球場かどうかを比べるための形（大文字・小文字の違いは同じとみなす）
+  function venueKey(name) {
+    return cleanVenueName(name).toLowerCase();
+  }
+
+  // 同じ名前の球場があればそれを、なければ新しく登録して返す
+  function findOrCreateVenue(data, name, now) {
+    const key = venueKey(name);
+    const existing = data.venues.find(function (venue) {
+      return isAlive(venue) && venueKey(venue.name) === key;
+    });
+    if (existing) return existing;
+    const venue = { id: createId(), name: name, createdAt: now, updatedAt: now, deletedAt: null };
+    data.venues.push(venue);
+    return venue;
+  }
+
+  /*
+   * 試合の球場を決める
+   *   input.venueName（文字）があれば … 同じ名前の球場を使う／なければ新しく登録する／空なら「球場なし」
+   *   input.venueId があれば         … 登録済みの球場か確認する
+   */
+  function applyVenue(data, input, values, now) {
+    if (input && Object.prototype.hasOwnProperty.call(input, 'venueName')) {
+      const name = cleanVenueName(input.venueName);
+      values.venueId = name ? findOrCreateVenue(data, name, now).id : null;
+      return;
+    }
+    if (input && Object.prototype.hasOwnProperty.call(input, 'venueId') && values.venueId !== null) {
+      if (!findAlive(data.venues, values.venueId)) throw notFound('球場が見つかりません。');
+    }
   }
 
   function cleanPlateAppearanceInput(input, current) {
@@ -187,6 +248,7 @@ window.App = window.App || {};
   // バックアップの中身を1件ずつ確認する（おかしなところがあれば、どこが悪いかを伝える）
   function validateRecords(data) {
     const playerIds = new Set();
+    const venueIds = new Set();
     const gameIds = new Set();
     const paIds = new Set();
 
@@ -211,6 +273,12 @@ window.App = window.App || {};
       if (typeof player.name !== 'string' || !player.name.trim()) throw invalid(name + 'の名前がありません。');
     });
 
+    data.venues.forEach(function (venue, i) {
+      const name = checkCommon(venue, '球場データ', i, venueIds);
+      if (typeof venue.name !== 'string' || !venue.name.trim()) throw invalid(name + 'の名前がありません。');
+      if (venue.name.length > VENUE_MAX) throw invalid(name + 'の名前が長すぎます。');
+    });
+
     data.games.forEach(function (game, i) {
       const name = checkCommon(game, '試合データ', i, gameIds);
       if (!isIsoDate(game.date)) throw invalid(name + 'の日付が正しくありません。');
@@ -218,6 +286,10 @@ window.App = window.App || {};
       if (game.opponent.length > OPPONENT_MAX) throw invalid(name + 'の対戦相手が長すぎます。');
       if (game.memo == null) game.memo = '';
       if (typeof game.memo !== 'string' || game.memo.length > MEMO_MAX) throw invalid(name + 'のメモが正しくありません。');
+      if (game.category === undefined) game.category = null;
+      if (game.category !== null && !App.getGameCategory(game.category)) throw invalid(name + 'の試合区分が正しくありません。');
+      if (game.venueId === undefined) game.venueId = null;
+      if (game.venueId !== null && !venueIds.has(game.venueId)) throw invalid(name + 'の球場が見つかりません。');
     });
 
     const gamesById = {};
@@ -248,7 +320,11 @@ window.App = window.App || {};
     if (!Array.isArray(source.players) || !Array.isArray(source.games) || !Array.isArray(source.plateAppearances)) {
       throw invalid('バックアップファイルの形式が正しくありません（試合や打席のデータがありません）。');
     }
-    if (source.players.length + source.games.length + source.plateAppearances.length > MAX_BACKUP_RECORDS) {
+    if (source.venues !== undefined && !Array.isArray(source.venues)) {
+      throw invalid('バックアップファイルの形式が正しくありません（球場のデータが正しくありません）。');
+    }
+    const venueCount = Array.isArray(source.venues) ? source.venues.length : 0;
+    if (source.players.length + venueCount + source.games.length + source.plateAppearances.length > MAX_BACKUP_RECORDS) {
       throw invalid('バックアップファイルのデータが多すぎます。');
     }
     const copy = clone(source);
@@ -293,6 +369,10 @@ window.App = window.App || {};
         if (e.code !== 'CORRUPTED') throw e;
         warning = e.message;
       }
+      // 古い形式のデータは、変換する前に元の形のまま退避しておく（万一のときに戻せるように）
+      if (loaded && (loaded.schemaVersion || 1) < SCHEMA_VERSION) {
+        await adapter.saveMigrationBackup(loaded.schemaVersion || 1, loaded);
+      }
       const data = loaded ? ensureShape(migrate(loaded)) : emptyDb();
       ensureCurrentPlayer(data);
       await adapter.save(data);
@@ -327,6 +407,7 @@ window.App = window.App || {};
       const values = cleanGameInput(input, {});
       return commit(function (data) {
         const now = nowIso();
+        applyVenue(data, input, values, now);
         const game = Object.assign({ id: createId() }, values, { createdAt: now, updatedAt: now, deletedAt: null });
         data.games.push(game);
         return game;
@@ -339,7 +420,10 @@ window.App = window.App || {};
       return commit(function (data) {
         const game = findAlive(data.games, id);
         if (!game) throw notFound('試合が見つかりません。');
-        Object.assign(game, cleanGameInput(changes, game), { updatedAt: nowIso() });
+        const now = nowIso();
+        const values = cleanGameInput(changes, game);
+        applyVenue(data, changes, values, now);
+        Object.assign(game, values, { updatedAt: now });
         return game;
       });
     },
@@ -361,6 +445,30 @@ window.App = window.App || {};
         });
         return null;
       });
+    },
+
+    // ----- 球場 -----
+
+    /** 登録済みの球場の一覧（よく使う順）。gameCount＝その球場で登録した試合数 */
+    listVenues: async function () {
+      requireReady();
+      const counts = {};
+      db.games.forEach(function (game) {
+        if (isAlive(game) && game.venueId) counts[game.venueId] = (counts[game.venueId] || 0) + 1;
+      });
+      return clone(db.venues.filter(isAlive).map(function (venue) {
+        return Object.assign({}, venue, { gameCount: counts[venue.id] || 0 });
+      }).sort(function (a, b) {
+        if (a.gameCount !== b.gameCount) return b.gameCount - a.gameCount;
+        return a.name.localeCompare(b.name, 'ja');
+      }));
+    },
+
+    /** 球場を1件取得（試合の表示用。見つからなければ null） */
+    getVenue: async function (id) {
+      requireReady();
+      if (!id) return null;
+      return clone(db.venues.find(function (venue) { return venue.id === id; }) || null);
     },
 
     // ----- 打席 -----
@@ -434,6 +542,7 @@ window.App = window.App || {};
       return {
         storage: adapter.name,
         games: db.games.filter(isAlive).length,
+        venues: db.venues.filter(isAlive).length,
         plateAppearances: db.plateAppearances.filter(isAlive).length,
         bytes: new Blob([JSON.stringify(db)]).size,
         lastExportedAt: db.settings.lastExportedAt || null
@@ -456,6 +565,7 @@ window.App = window.App || {};
         },
         data: clone({
           players: db.players,
+          venues: db.venues,
           games: db.games,
           plateAppearances: db.plateAppearances,
           settings: db.settings

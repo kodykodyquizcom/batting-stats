@@ -8,7 +8,7 @@ window.App = window.App || {};
 (function (App) {
   'use strict';
 
-  App.APP_VERSION = '1.0.0';
+  App.APP_VERSION = '1.1.0';
 
   /*
    * 打席結果の一覧（入力ボタンはこの順番で並びます）
@@ -37,6 +37,26 @@ window.App = window.App || {};
 
   // 1打席で選べる打点
   App.RBI_OPTIONS = [0, 1, 2, 3, 4];
+
+  /*
+   * 試合区分（code はデータとして保存する名前。あとから変えないこと）
+   * 区分を選んでいない試合（以前に登録した試合など）は null として保存し、「未設定」と表示する。
+   */
+  App.GAME_CATEGORIES = [
+    { code: 'official', label: '公式戦' },
+    { code: 'practice', label: '練習試合' }
+  ];
+  App.GAME_CATEGORY_UNSET_LABEL = '未設定';
+
+  App.getGameCategory = function (code) {
+    return App.GAME_CATEGORIES.find(function (category) { return category.code === code; }) || null;
+  };
+
+  // 試合区分の表示名（未設定なら「未設定」）
+  App.gameCategoryLabel = function (code) {
+    const category = App.getGameCategory(code);
+    return category ? category.label : App.GAME_CATEGORY_UNSET_LABEL;
+  };
 
   App.getResultType = function (code) {
     return App.RESULT_TYPES.find(function (type) { return type.code === code; });

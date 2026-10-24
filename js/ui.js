@@ -79,6 +79,13 @@
       '</span>';
   }
 
+  // 試合区分の小さなラベル（未設定なら何も出さない）
+  function categoryPill(code) {
+    const category = App.getGameCategory(code);
+    if (!category) return '';
+    return '<span class="category-pill category-pill--' + category.code + '">' + category.label + '</span>';
+  }
+
   // 主な記録（本塁打・四球・死球・三振）を1行で
   function keyCounts(summary) {
     return '<span class="key-counts">' +
@@ -212,6 +219,9 @@
     chevron:
       '<svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">' +
       '<path d="M9 18l6-6-6-6"/></svg>',
+    pin:
+      '<svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">' +
+      '<path d="M12 21s-7-6.2-7-11.5A7 7 0 0 1 19 9.5C19 14.8 12 21 12 21z"/><circle cx="12" cy="9.5" r="2.5"/></svg>',
     gear:
       '<svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">' +
       '<circle cx="12" cy="12" r="3"/>' +
@@ -229,6 +239,7 @@
     formatRate: formatRate,
     statLine: statLine,
     keyCounts: keyCounts,
+    categoryPill: categoryPill,
     detailStats: detailStats,
     toast: toast,
     openSheet: openSheet,

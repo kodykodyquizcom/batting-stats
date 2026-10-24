@@ -153,7 +153,8 @@ App.screens = App.screens || {};
       const game = await App.store.getGame(params.gameId);
       if (!game) return null;
       const plateAppearances = await App.store.listPlateAppearances({ gameId: game.id });
-      return { game: game, plateAppearances: plateAppearances, summary: App.stats.summarize(plateAppearances) };
+      const venue = await App.store.getVenue(game.venueId);
+      return { game: game, venue: venue, plateAppearances: plateAppearances, summary: App.stats.summarize(plateAppearances) };
     },
 
     header: function (params, data) {
@@ -185,6 +186,14 @@ App.screens = App.screens || {};
       main.innerHTML =
         '<section class="game-summary">' +
           '<div class="game-summary__date">' + ui.formatDateLong(game.date) + '</div>' +
+          '<div class="game-summary__meta">' +
+            (App.getGameCategory(game.category)
+              ? '<span class="game-tag game-tag--' + game.category + '">' + App.gameCategoryLabel(game.category) + '</span>'
+              : '<span class="game-tag game-tag--unset">区分 ' + App.GAME_CATEGORY_UNSET_LABEL + '</span>') +
+            '<span class="game-summary__venue' + (data.venue ? '' : ' is-empty') + '">' +
+              ui.icons.pin + (data.venue ? ui.escapeHtml(data.venue.name) : '球場 未登録') +
+            '</span>' +
+          '</div>' +
           '<div class="game-summary__line">' + ui.statLine(s) + '</div>' +
           '<div class="game-summary__counts">' + ui.keyCounts(s) + '</div>' +
           '<div class="game-summary__rates">' +

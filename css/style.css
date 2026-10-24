@@ -1321,3 +1321,192 @@ body.has-sheet {
   background: var(--c-walk-bg);
   color: #1d3f78;
 }
+
+/* ---------- 改良第1弾：試合区分・球場 ---------- */
+
+:root {
+  --c-official: #9b1c31;        /* 公式戦：エンジ */
+  --c-official-bg: #f8e6e9;
+  --c-practice-bg: #e6eaf3;
+}
+
+/* 試合一覧：公式戦は日付ラベルをエンジに（練習試合・未設定は従来の紺） */
+.game-card__date--official {
+  background: var(--c-official);
+}
+
+.game-card__title {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+}
+
+.game-card__title .game-card__opponent {
+  min-width: 0;
+}
+
+.category-pill {
+  flex: 0 0 auto;
+  padding: 1px 8px;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 700;
+  line-height: 1.6;
+}
+
+.category-pill--official {
+  background: var(--c-official-bg);
+  color: var(--c-official);
+}
+
+.category-pill--practice {
+  background: var(--c-practice-bg);
+  color: var(--c-navy-800);
+}
+
+/* 試合詳細：区分と球場 */
+.game-summary__meta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px 12px;
+  margin-top: 6px;
+}
+
+.game-tag {
+  padding: 2px 10px;
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.game-tag--official {
+  background: var(--c-official);
+  color: #fff;
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.25);
+}
+
+.game-tag--practice {
+  background: rgba(255, 255, 255, 0.16);
+  color: #fff;
+}
+
+.game-tag--unset {
+  border: 1px dashed rgba(255, 255, 255, 0.4);
+  color: rgba(255, 255, 255, 0.7);
+  font-weight: 500;
+}
+
+.game-summary__venue {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  min-width: 0;
+  font-size: 13px;
+  overflow-wrap: anywhere;
+}
+
+.game-summary__venue svg {
+  flex: 0 0 auto;
+  width: 15px;
+  height: 15px;
+  opacity: 0.8;
+}
+
+.game-summary__venue.is-empty {
+  opacity: 0.6;
+}
+
+/* 登録画面：試合区分の切り替え */
+.segmented {
+  display: grid;
+  grid-template-columns: 1fr 1fr 0.8fr;
+  gap: 6px;
+}
+
+.segmented__btn {
+  min-height: 46px;
+  padding: 0 6px;
+  border: 1.5px solid var(--c-border);
+  border-radius: var(--radius-sm);
+  background: var(--c-surface);
+  font-size: 15px;
+  font-weight: 700;
+  color: var(--c-text);
+  cursor: pointer;
+}
+
+.segmented__btn--unset {
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--c-muted);
+}
+
+.segmented__btn.is-selected {
+  color: #fff;
+}
+
+.segmented__btn--official.is-selected {
+  background: var(--c-official);
+  border-color: var(--c-official);
+}
+
+.segmented__btn--practice.is-selected {
+  background: var(--c-navy-800);
+  border-color: var(--c-navy-800);
+}
+
+.segmented__btn--unset.is-selected {
+  background: var(--c-out);
+  border-color: var(--c-out);
+}
+
+/* 登録画面：登録済みの球場 */
+.venue-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 10px;
+}
+
+.venue-chips__label {
+  flex: 0 0 100%;
+  font-size: 12px;
+  color: var(--c-muted);
+}
+
+.venue-chip {
+  max-width: 100%;
+  min-height: 36px;
+  padding: 4px 14px;
+  border: 1.5px solid var(--c-border);
+  border-radius: 999px;
+  background: var(--c-surface);
+  font-size: 14px;
+  color: var(--c-text);
+  overflow-wrap: anywhere;
+  cursor: pointer;
+}
+
+.venue-chip.is-selected {
+  background: var(--c-navy-800);
+  border-color: var(--c-navy-800);
+  color: #fff;
+  font-weight: 700;
+}
+
+.field__hint {
+  margin: 8px 0 0;
+  font-size: 12px;
+  color: var(--c-muted);
+}
+
+.field__hint:empty {
+  display: none;
+}
+
+.field__hint.is-new {
+  color: var(--c-hit);
+  font-weight: 700;
+}

@@ -85,24 +85,33 @@ window.App = window.App || {};
   async function buildCsv() {
     const games = (await App.store.listGames()).reverse(); // 古い順
     const plateAppearances = await App.store.listPlateAppearances();
+    const venueNames = {};
+    for (const game of games) {
+      if (game.venueId && !(game.venueId in venueNames)) {
+        const venue = await App.store.getVenue(game.venueId);
+        venueNames[game.venueId] = venue ? venue.name : '';
+      }
+    }
 
     const byGame = {};
     plateAppearances.forEach(function (pa) {
       (byGame[pa.gameId] = byGame[pa.gameId] || []).push(pa);
     });
 
-    const header = ['日付', '対戦相手']
+    const header = ['日付', '対戦相手', '試合区分', '球場']
       .concat(CSV_COLUMNS.map(function (c) { return c[0]; }))
       .concat(RATE_COLUMNS.map(function (c) { return c[0]; }))
       .concat(['メモ']);
 
     const rows = games.map(function (game) {
       const summary = App.stats.summarize(byGame[game.id] || []);
-      return [game.date, textField(game.opponent)].concat(statFields(summary)).concat([textField(game.memo)]);
+      return [game.date, textField(game.opponent), textField(App.gameCategoryLabel(game.category)),
+        textField(game.venueId ? venueNames[game.venueId] : '')]
+        .concat(statFields(summary)).concat([textField(game.memo)]);
     });
 
     const career = App.stats.summarize(plateAppearances);
-    rows.push([textField('通算'), textField(games.length + '試合')].concat(statFields(career)).concat(['""']));
+    rows.push([textField('通算'), textField(games.length + '試合'), '""', '""'].concat(statFields(career)).concat(['""']));
 
     const lines = [header.map(textField).join(',')].concat(rows.map(function (row) { return row.join(','); }));
     // 先頭の ﻿ は、Excelで開いたときに文字化けしないための印

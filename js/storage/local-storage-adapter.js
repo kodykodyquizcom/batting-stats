@@ -86,6 +86,17 @@ window.App = window.App || {};
 
       clearSnapshot: async function () {
         getStorage().removeItem(storageKey + '/before-restore');
+      },
+
+      // データ形式を新しくする直前に、元のデータをそのままの形で退避する（最初の1回分だけ残す）
+      saveMigrationBackup: async function (fromVersion, data) {
+        const key = storageKey + '/before-migration-v' + fromVersion;
+        if (getStorage().getItem(key) != null) return;
+        try {
+          getStorage().setItem(key, JSON.stringify({ savedAt: new Date().toISOString(), data: data }));
+        } catch (e) {
+          throw StorageError('アプリの更新前に今のデータを退避できなかったため、更新を中止しました。記録はそのまま残っています。端末の空き容量を確認してください。', 'SAVE_FAILED', e);
+        }
       }
     };
   }

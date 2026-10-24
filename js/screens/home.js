@@ -32,12 +32,15 @@ App.screens = App.screens || {};
     return (
       '<li>' +
         '<a class="game-card" href="#/games/' + encodeURIComponent(game.id) + '">' +
-          '<div class="game-card__date">' +
+          '<div class="game-card__date' + (game.category === 'official' ? ' game-card__date--official' : '') + '">' +
             '<span class="game-card__md">' + ui.formatDateShort(game.date) + '</span>' +
             '<span class="game-card__dow">' + ui.weekday(game.date) + '</span>' +
           '</div>' +
           '<div class="game-card__body">' +
-            '<div class="game-card__opponent">vs ' + ui.escapeHtml(game.opponent) + '</div>' +
+            '<div class="game-card__title">' +
+              '<span class="game-card__opponent">vs ' + ui.escapeHtml(game.opponent) + '</span>' +
+              ui.categoryPill(game.category) +
+            '</div>' +
             '<div class="game-card__line">' + ui.statLine(item.summary) + '</div>' +
             '<div class="pa-marks">' + paMarks(item.plateAppearances) + '</div>' +
           '</div>' +

@@ -141,6 +141,7 @@ App.screens = App.screens || {};
           '<dl class="info-list">' +
             '<div><dt>選手</dt><dd>' + ui.escapeHtml(data.player.name) + '</dd></div>' +
             '<div><dt>試合</dt><dd>' + usage.games + '件</dd></div>' +
+            '<div><dt>球場</dt><dd>' + usage.venues + '件</dd></div>' +
             '<div><dt>打席</dt><dd>' + usage.plateAppearances + '件</dd></div>' +
             '<div><dt>使用容量</dt><dd>' + formatBytes(usage.bytes) + '</dd></div>' +
           '</dl>' +
