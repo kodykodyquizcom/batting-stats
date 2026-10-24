@@ -1,0 +1,40 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#0b1630">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="打撃成績">
+  <title>打撃成績</title>
+  <meta name="description" content="野球の打撃成績を記録・集計するアプリ">
+  <link rel="manifest" href="manifest.webmanifest">
+  <link rel="icon" type="image/png" sizes="32x32" href="icons/favicon-32.png">
+  <link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
+  <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+  <!-- 画面上部のヘッダー（中身は js/app.js が画面ごとに書き換えます） -->
+  <header class="app-header" id="app-header"></header>
+
+  <!-- 各画面の中身が入る場所（js/screens/ の各ファイルが描画します） -->
+  <main class="app-main" id="app-main"></main>
+
+  <!-- 「記録しました」などの短いお知らせ -->
+  <div class="toast" id="toast" role="status" aria-live="polite"></div>
+
+  <!-- 読み込む順番に意味があります（共通の部品 → 保存の仕組み → 各画面 → 起動処理） -->
+  <script src="js/constants.js"></script>
+  <script src="js/ui.js"></script>
+  <script src="js/stats.js"></script>
+  <script src="js/storage/local-storage-adapter.js"></script>
+  <script src="js/storage/store.js"></script>
+  <script src="js/backup.js"></script>
+  <script src="js/screens/home.js"></script>
+  <script src="js/screens/game-form.js"></script>
+  <script src="js/screens/game-detail.js"></script>
+  <script src="js/screens/settings.js"></script>
+  <script src="js/app.js"></script>
+</body>
+</html>
