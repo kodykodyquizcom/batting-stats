@@ -1883,3 +1883,395 @@ body.has-sheet {
   min-height: 44px;
   font-size: 14px;
 }
+
+/* ---------- v1.3.0：打撃分析（BATTER ANALYTICS） ---------- */
+
+/* ホーム：分析画面への入口 */
+.analytics-link {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-top: 12px;
+  padding: 12px 10px 12px 14px;
+  border-radius: var(--radius);
+  background: linear-gradient(160deg, var(--c-navy-700), var(--c-navy-900));
+  color: #fff;
+  text-decoration: none;
+  box-shadow: var(--shadow);
+  transition: transform 0.06s ease, filter 0.06s ease;
+}
+
+.analytics-link:active {
+  transform: scale(0.99);
+  filter: brightness(0.94);
+}
+
+.analytics-link__icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex: 0 0 auto;
+  width: 40px;
+  height: 40px;
+  border-radius: 10px;
+  background: rgba(246, 200, 95, 0.14);
+  color: var(--c-gold);
+}
+
+.analytics-link__icon svg {
+  width: 22px;
+  height: 22px;
+}
+
+.analytics-link__text {
+  display: flex;
+  flex-direction: column;
+  flex: 1 1 auto;
+  min-width: 0;
+  line-height: 1.3;
+}
+
+.analytics-link__title {
+  font-family: var(--font-num);
+  font-size: 16px;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+}
+
+.analytics-link__sub {
+  font-size: 12px;
+  color: rgba(255, 255, 255, 0.72);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.analytics-link__chevron {
+  flex: 0 0 auto;
+  color: rgba(255, 255, 255, 0.6);
+}
+
+.analytics-link__chevron svg {
+  width: 20px;
+  height: 20px;
+}
+
+/* 切り替えボタン（スクロールしても上に残る） */
+.analytics-filter {
+  position: sticky;
+  top: calc(var(--safe-top) + var(--header-h) + 3px);
+  z-index: 10;
+  margin: -16px -16px 12px;
+  padding: 12px 16px 10px;
+  background: var(--c-bg);
+}
+
+.analytics-filter__buttons {
+  grid-template-columns: repeat(3, 1fr);
+}
+
+.analytics-filter__btn--all.is-selected {
+  background: var(--c-board);
+  border-color: var(--c-board);
+}
+
+.analytics-filter__btn--official.is-selected {
+  background: var(--c-official);
+  border-color: var(--c-official);
+}
+
+.analytics-filter__btn--practice.is-selected {
+  background: var(--c-navy-800);
+  border-color: var(--c-navy-800);
+}
+
+.analytics-hint {
+  margin: -4px 4px 10px;
+  font-size: 12px;
+  color: var(--c-muted);
+}
+
+.analytics-notice {
+  margin: 12px 0 0;
+  padding: 12px 14px;
+  border-radius: var(--radius-sm);
+  background: var(--c-surface);
+  border: 2px dashed var(--c-border);
+  font-size: 13px;
+  color: var(--c-muted);
+  text-align: center;
+}
+
+/* スコアボード風の指標パネル */
+.analytics-board__filter {
+  padding: 2px 10px;
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 700;
+  background: rgba(244, 241, 232, 0.12);
+}
+
+.analytics-board__filter--official {
+  background: var(--c-official);
+  color: #fff;
+}
+
+.analytics-board__filter--practice {
+  background: var(--c-navy-700);
+  color: #fff;
+}
+
+.metric-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  border-top: 1px solid var(--c-board-line);
+}
+
+.metric {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  min-width: 0;
+  padding: 10px 2px 10px;
+  border-bottom: 1px solid var(--c-board-line);
+  text-align: center;
+}
+
+.metric:not(:nth-child(3n + 1)) {
+  border-left: 1px solid var(--c-board-line);
+}
+
+.metric__label {
+  font-family: var(--font-num);
+  font-size: 15px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  line-height: 1.2;
+}
+
+.metric__name {
+  font-size: 10px;
+  opacity: 0.7;
+  white-space: nowrap;
+}
+
+.metric__value {
+  margin-top: 2px;
+  font-family: var(--font-num);
+  font-size: 26px;
+  font-weight: 700;
+  line-height: 1.2;
+  color: var(--c-gold);
+  font-variant-numeric: tabular-nums;
+  text-shadow: 0 0 12px rgba(246, 200, 95, 0.35);
+  white-space: nowrap;
+}
+
+.metric__parts {
+  font-family: var(--font-num);
+  font-size: 11px;
+  opacity: 0.6;
+  font-variant-numeric: tabular-nums;
+}
+
+.metric--sample .metric__label {
+  opacity: 0.75;
+}
+
+.metric__sample {
+  font-size: 12px;
+  line-height: 1.45;
+}
+
+.metric__sample:first-of-type {
+  margin-top: 4px;
+}
+
+.metric__sample b {
+  margin-right: 2px;
+  font-family: var(--font-num);
+  font-size: 19px;
+  color: #fff;
+}
+
+/* 基本の成績 */
+.analytics-basic,
+.analytics-compare {
+  margin-top: 12px;
+  padding: 14px 16px 16px;
+}
+
+.analytics-card__title {
+  margin: 0 0 10px;
+  font-size: 13px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  color: var(--c-muted);
+}
+
+.analytics-rates {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  border-radius: var(--radius-sm);
+  background: var(--c-bg);
+}
+
+.analytics-rate {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 8px 0 6px;
+}
+
+.analytics-rate + .analytics-rate {
+  border-left: 1px solid var(--c-border);
+}
+
+.analytics-rate__label {
+  font-size: 11px;
+  color: var(--c-muted);
+}
+
+.analytics-rate__value {
+  font-family: var(--font-num);
+  font-size: 22px;
+  font-weight: 700;
+  line-height: 1.25;
+  color: var(--c-navy-800);
+  font-variant-numeric: tabular-nums;
+}
+
+.analytics-basic__line {
+  margin-top: 10px;
+  text-align: center;
+  font-size: 13px;
+}
+
+.analytics-basic__line .stat-line {
+  justify-content: center;
+}
+
+.analytics-basic__counts {
+  margin-top: 2px;
+  text-align: center;
+  font-size: 12px;
+  color: var(--c-muted);
+}
+
+.analytics-basic__counts b {
+  color: var(--c-text);
+}
+
+/* 区分別の比較表 */
+.analytics-compare__scroll {
+  overflow-x: auto;
+}
+
+.compare-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 13px;
+}
+
+.compare-table th,
+.compare-table td {
+  padding: 7px 6px;
+  border-bottom: 1px solid var(--c-border);
+  text-align: right;
+  white-space: nowrap;
+}
+
+.compare-table thead th {
+  font-size: 12px;
+  color: var(--c-muted);
+  font-weight: 700;
+}
+
+.compare-table tbody th {
+  text-align: left;
+  font-family: var(--font-num);
+  font-weight: 700;
+  color: var(--c-muted);
+}
+
+.compare-table td {
+  font-family: var(--font-num);
+  font-size: 15px;
+  font-variant-numeric: tabular-nums;
+}
+
+.compare-table tbody tr:last-child th,
+.compare-table tbody tr:last-child td {
+  border-bottom: 0;
+}
+
+.compare-table .is-current {
+  background: rgba(246, 200, 95, 0.16);
+  color: var(--c-text);
+  font-weight: 700;
+}
+
+.compare-table thead .is-current {
+  border-radius: 8px 8px 0 0;
+}
+
+/* 指標の見方 */
+.guide-list {
+  margin: 0 0 12px;
+}
+
+.guide-item {
+  padding: 10px 0;
+  border-top: 1px solid var(--c-border);
+}
+
+.guide-item dt {
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.guide-item__label {
+  display: inline-block;
+  min-width: 56px;
+  margin-right: 6px;
+  font-family: var(--font-num);
+  font-size: 15px;
+  color: var(--c-navy-800);
+}
+
+.guide-item dd {
+  margin: 2px 0 0;
+  font-size: 12px;
+  line-height: 1.7;
+  color: var(--c-muted);
+}
+
+.guide-item__formula {
+  display: inline-block;
+  margin-top: 2px;
+  padding: 1px 8px;
+  border-radius: 6px;
+  background: var(--c-bg);
+  color: var(--c-text);
+  font-weight: 700;
+}
+
+@media (max-width: 359px) {
+  .metric__value {
+    font-size: 21px;
+  }
+
+  .analytics-rate__value {
+    font-size: 18px;
+  }
+}
+
+@media (min-width: 600px) {
+  .analytics-filter {
+    margin-top: -24px;
+  }
+
+  .metric__value {
+    font-size: 30px;
+  }
+}

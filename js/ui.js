@@ -69,6 +69,15 @@
     return text.charAt(0) === '0' ? text.slice(1) : text;
   }
 
+  /*
+   * ％の表示：小数第2位を四捨五入して1桁で表示（0.125 → 12.5%）。計算できないときは「-」
+   */
+  function formatPercent(value) {
+    if (value == null || !Number.isFinite(value)) return '-';
+    const tenths = Math.round(value * 1000 + 1e-7);
+    return (tenths / 10).toFixed(1) + '%';
+  }
+
   // 「4打席 3打数 2安打 1打点」の表示
   function statLine(summary) {
     return '<span class="stat-line">' +
@@ -393,6 +402,9 @@
     pin:
       '<svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">' +
       '<path d="M12 21s-7-6.2-7-11.5A7 7 0 0 1 19 9.5C19 14.8 12 21 12 21z"/><circle cx="12" cy="9.5" r="2.5"/></svg>',
+    chart:
+      '<svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">' +
+      '<path d="M4 20V10M10 20V4M16 20v-7M22 20H2"/></svg>',
     gear:
       '<svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">' +
       '<circle cx="12" cy="12" r="3"/>' +
@@ -408,6 +420,7 @@
     weekday: weekday,
     todayIso: todayIso,
     formatRate: formatRate,
+    formatPercent: formatPercent,
     statLine: statLine,
     keyCounts: keyCounts,
     categoryPill: categoryPill,

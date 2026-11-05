@@ -1,0 +1,57 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>計算テスト｜打撃成績</title>
+  <style>
+    body { margin: 0; padding: 16px; font-family: -apple-system, "Hiragino Sans", "Noto Sans JP", sans-serif; background: #edf0f5; color: #152033; }
+    h1 { font-size: 18px; margin: 0 0 4px; }
+    .note { font-size: 13px; color: #667085; margin: 0 0 12px; }
+    .summary { padding: 12px 16px; border-radius: 12px; font-weight: 700; font-size: 16px; color: #fff; }
+    .summary.ok { background: #1d8a4b; }
+    .summary.ng { background: #d7263d; }
+    ul { list-style: none; margin: 12px 0 0; padding: 0; background: #fff; border-radius: 12px; }
+    li { padding: 8px 12px; border-top: 1px solid #dce1e9; font-size: 14px; }
+    li:first-child { border-top: 0; }
+    .mark { display: inline-block; width: 1.5em; font-weight: 700; }
+    .pass .mark { color: #1d8a4b; }
+    .fail { background: #fdecef; }
+    .fail .mark { color: #d7263d; }
+    .detail { display: block; margin-left: 1.5em; font-size: 12px; color: #b01d31; }
+  </style>
+</head>
+<body>
+  <h1>打撃分析の計算テスト</h1>
+  <p class="note">成績の計算が正しいかを自動で確かめます。保存されている試合・打席のデータには触れません。</p>
+  <div class="summary" id="summary">テスト中…</div>
+  <ul id="list"></ul>
+
+  <script src="../js/constants.js"></script>
+  <script src="../js/ui.js"></script>
+  <script src="../js/stats.js"></script>
+  <script src="analytics-tests.js"></script>
+  <script>
+    (function () {
+      var results = (window.App && App.testResults) || [];
+      var failed = results.filter(function (r) { return !r.ok; });
+      var summary = document.getElementById('summary');
+      if (!results.length) {
+        summary.textContent = 'テストを実行できませんでした';
+        summary.className = 'summary ng';
+      } else {
+        summary.textContent = failed.length
+          ? '✕ ' + results.length + '件中 ' + failed.length + '件が不合格'
+          : '✓ ' + results.length + '件すべて合格';
+        summary.className = 'summary ' + (failed.length ? 'ng' : 'ok');
+      }
+      document.getElementById('list').innerHTML = results.map(function (r) {
+        var text = r.name.replace(/&/g, '&amp;').replace(/</g, '&lt;');
+        return '<li class="' + (r.ok ? 'pass' : 'fail') + '"><span class="mark">' + (r.ok ? '✓' : '✕') + '</span>' + text +
+          (r.detail ? '<span class="detail">' + r.detail.replace(/</g, '&lt;') + '</span>' : '') + '</li>';
+      }).join('');
+      document.title = (failed.length ? 'NG ' : 'OK ') + document.title;
+    })();
+  </script>
+</body>
+</html>

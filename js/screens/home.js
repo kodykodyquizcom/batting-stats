@@ -100,6 +100,15 @@ App.screens = App.screens || {};
           '<div class="scoreboard__counts">' + ui.keyCounts(career) + '</div>' +
         '</section>' +
 
+        '<a class="analytics-link" href="#/analytics">' +
+          '<span class="analytics-link__icon">' + ui.icons.chart + '</span>' +
+          '<span class="analytics-link__text">' +
+            '<span class="analytics-link__title">BATTER ANALYTICS</span>' +
+            '<span class="analytics-link__sub">打撃分析　BB%・K%・ISO・BABIP・XBH%</span>' +
+          '</span>' +
+          '<span class="analytics-link__chevron">' + ui.icons.chevron + '</span>' +
+        '</a>' +
+
         ui.detailStats(career, '通算の詳しい成績を見る') +
 
         '<section class="section">' +

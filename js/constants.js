@@ -8,7 +8,7 @@ window.App = window.App || {};
 (function (App) {
   'use strict';
 
-  App.APP_VERSION = '1.2.0';
+  App.APP_VERSION = '1.3.0';
 
   /*
    * 打席結果の一覧（入力ボタンはこの順番で並びます）
@@ -52,6 +52,13 @@ window.App = window.App || {};
   App.getGameCategory = function (code) {
     return App.GAME_CATEGORIES.find(function (category) { return category.code === code; }) || null;
   };
+
+  // 打撃分析の切り替えボタン（「未設定」の試合は「全試合」にだけ含まれる）
+  App.ANALYTICS_FILTERS = [
+    { code: 'all', label: '全試合' },
+    { code: 'official', label: '公式戦' },
+    { code: 'practice', label: '練習試合' }
+  ];
 
   // 試合区分の表示名（未設定なら「未設定」）
   App.gameCategoryLabel = function (code) {

@@ -6,6 +6,7 @@
  *   #/games/new        → 試合を追加
  *   #/games/{id}       → 試合の画面
  *   #/games/{id}/edit  → 試合を編集
+ *   #/analytics        → 打撃分析（BATTER ANALYTICS）
  *   #/settings         → 設定
  * 画面を増やすときは、js/screens/ にファイルを作り、下の routes に1行追加します。
  */
@@ -19,6 +20,7 @@
     { pattern: /^\/games\/new$/, screen: 'gameForm', params: function () { return { mode: 'new' }; } },
     { pattern: /^\/games\/([^/]+)\/edit$/, screen: 'gameForm', params: function (m) { return { mode: 'edit', gameId: decodeURIComponent(m[1]) }; } },
     { pattern: /^\/games\/([^/]+)$/, screen: 'gameDetail', params: function (m) { return { gameId: decodeURIComponent(m[1]) }; } },
+    { pattern: /^\/analytics$/, screen: 'analytics' },
     { pattern: /^\/settings$/, screen: 'settings' }
   ];
 
